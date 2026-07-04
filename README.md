@@ -72,7 +72,7 @@ intermediate / silver
  └── rpt_reconciliation_summary
       │
       ▼
-External Streamlit Apps
+ Streamlit Apps
 ```
 
 ## Technology Stack
@@ -85,7 +85,7 @@ External Streamlit Apps
 | File ingestion | SnowSQL |
 | Transformation | dbt |
 | Version control | GitHub |
-| Reporting | External Streamlit applications |
+| Reporting | Streamlit applications |
 
 ## Project Structure
 
@@ -123,7 +123,7 @@ This project uses a custom `generate_schema_name` macro.
 
 Examples:
 
-- dev/default target with `target.schema = analytics_alice` → `analytics_alice_bronze`
+- dev/default target with `target.schema = dbt_cbasnet` → `dbt_cbasnet_bronze`
 - prod target with `target.name = 'PROD'` → `bronze`
 
 ## Implementation Journey
@@ -212,7 +212,7 @@ The project is designed to run through a production dbt job that:
 
 ## Streamlit Consumption
 
-External Streamlit applications consume the gold-layer models produced by this project.
+Streamlit applications consume the gold-layer models produced by this project.
 
 Current business-facing use cases include:
 
@@ -220,16 +220,17 @@ Current business-facing use cases include:
 - Quality Summary
 - Reconciliation Summary
 
-This keeps dbt responsible for transformation, testing, and trusted data publication, while Streamlit provides the presentation layer externally.
-
 ## Running the Project
 
 ### Prerequisites
 
-- Snowflake access with permissions to the target database and schemas
-- access to the internal stage `@BUSINESS_NAME_DQ.RAW.BUSINESS_NAME_STAGE`
-- access to the raw source view `VW_BUSINESS_NAMES` in Snowflake
-- a dbt target configured for your environment
+Before running the project, ensure you have:
+
+- Access to a Snowflake account with the required permissions to create and manage databases, schemas, stages, views, and tables
+- A configured dbt Cloud project environment connected to your Snowflake account
+- Access to the project's GitHub repository
+- SnowSQL installed (required for uploading the source CSV to the Snowflake stage)
+- Python or Google Colab (required only if re-running the data extraction process)
 
 ### Upload CSV
 
@@ -242,12 +243,6 @@ PUT file://<local_csv_path>
 
 ```bash
 dbt build
-```
-
-### Generate Documentation
-
-```bash
-dbt docs generate
 ```
 
 ## Assumptions
