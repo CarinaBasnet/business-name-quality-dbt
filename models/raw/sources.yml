@@ -1,0 +1,17 @@
+version: 2
+
+sources:
+  - name: raw
+    database: BUSINESS_NAME_DQ
+    schema: RAW
+    description: Raw layer views created from Snowflake staged CSV files.
+    tables:
+      - name: VW_BUSINESS_NAMES
+        description: Raw business names data queried from Snowflake managed stage.
+        columns:
+          - name: BN_NAME
+            description: Business name from the source register.
+          - name: BN_STATUS
+            description: Registration status of the business name.
+          - name: BN_ABN
+            description: Australian Business Number.
