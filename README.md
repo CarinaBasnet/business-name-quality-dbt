@@ -1,92 +1,277 @@
-# Business Name Quality & Reconciliation dbt Project
+# Business Name Data Quality Pipeline
 
-This project uses dbt to validate, standardise, and reconcile business name records loaded into Snowflake. The core goal is to make data quality issues visible early, preserve enough lineage to trace records back to source files, and publish simple gold-layer outputs for operational review and downstream search use cases.
+## Overview
 
-## What the project does
+This project implements an end-to-end data quality pipeline for the Australian Register of Business Names dataset.
 
-The project takes raw business name extracts, applies light standardisation in staging, flags quality issues in the silver layer, and publishes summary-style gold models for reconciliation and reporting.
+The objective is to show how an external dataset can be ingested, profiled, validated, transformed, and published into trusted reporting datasets that support business name search, reconciliation, autocomplete, and downstream analytics.
 
-Key quality checks currently implemented include:
-- invalid ABN length
-- missing business names
-- unexpected registration status values
-- registered records with cancellation dates
-- duplicate business names based on ABN and standardised name
+The project uses dbt's recommended project structure: `staging`, `intermediate`, and `marts`. Those folders map to medallion-style Snowflake schemas:
 
-## Project structure
+- `staging` → `bronze`
+- `intermediate` → `silver`
+- `marts` → `gold`
 
-The project follows a bronze / silver / gold pattern:
+The gold outputs are also consumed by external Streamlit applications for business-facing access and summary reporting.
 
-- `models/raw/` declares the raw Snowflake source used by the project
-- `models/bronze/` standardises and types raw fields in `stg_business_names`
-- `models/silver/` applies business rules and DQ flags in `int_business_names_cleaned`
-- `models/gold/` publishes reporting and reconciliation outputs:
-  - `rpt_business_name_search` exposes business-name records with a search eligibility flag
-  - `rpt_quality_summary` provides one-row issue counts across the cleaned dataset
-  - `rpt_reconciliation_summary` compares row counts across pipeline layers
+## Business Context
 
-## DAG overview
+The Australian Business Register contains millions of registered business names. Before this data can be consumed reliably by applications or reporting tools, it needs to be validated, standardised, and reconciled.
+
+This project demonstrates a practical analytics engineering workflow that:
+
+- ingests data from an external source
+- preserves source lineage and metadata
+- applies business rules and data quality validation
+- produces trusted reporting datasets
+- monitors data quality through automated testing and summary reporting
+
+Potential downstream use cases include:
+
+- business name autocomplete
+- business name matching
+- customer onboarding validation
+- reporting and analytics
+- data reconciliation
+
+## Solution Architecture
 
 ```text
-source('raw', 'VW_BUSINESS_NAMES')
-  -> stg_business_names
-    -> int_business_names_cleaned
-      -> rpt_business_name_search
-      -> rpt_quality_summary
-      -> rpt_reconciliation_summary
+Australian Business Register API
+                │
+                ▼
+        Google Colab (Python)
+                │
+                ▼
+            Local CSV File
+                │
+                ▼
+       SnowSQL (PUT Command)
+                │
+                ▼
+ Snowflake Internal Stage
+(@BUSINESS_NAME_DQ.RAW.BUSINESS_NAME_STAGE)
+                │
+                ▼
+      RAW View (VW_BUSINESS_NAMES)
+                │
+                ▼
+          dbt Source
+                │
+      ┌─────────┴───────────────┐
+      ▼                         ▼
+ staging / bronze          tests + docs
+      │
+      ▼
+intermediate / silver
+      │
+      ▼
+    marts / gold
+ ├── rpt_business_name_search
+ ├── rpt_quality_summary
+ └── rpt_reconciliation_summary
+      │
+      ▼
+External Streamlit Apps
 ```
 
-## Model intent
+## Technology Stack
 
-### `stg_business_names`
-Standardises raw fields from the staged source extract. This is where trimming, casing, and date parsing happen, while source lineage columns are preserved for traceability.
+| Component | Technology |
+| --- | --- |
+| Data source | Australian Business Register API |
+| Extraction | Google Colab (Python) |
+| Warehouse | Snowflake |
+| File ingestion | SnowSQL |
+| Transformation | dbt |
+| Version control | GitHub |
+| Reporting | External Streamlit applications |
 
-### `int_business_names_cleaned`
-Applies the project’s main reconciliation logic. It standardises business names for matching, derives issue flags, and ranks duplicates within each `bn_abn` + standardised-name grouping.
+## Project Structure
 
-### `rpt_business_name_search`
-Publishes a consumer-facing subset of attributes with an `is_search_eligible` flag so downstream users can filter to records that pass the project’s core validation rules.
+```text
+.
+├── models/
+│   ├── raw/
+│   ├── staging/
+│   ├── intermediate/
+│   └── marts/
+├── tests/
+├── macros/
+├── analyses/
+├── snapshots/
+├── dbt_project.yml
+└── README.md
+```
 
-### `rpt_quality_summary`
-Produces a one-row snapshot of key data quality issue counts. This is the quickest model to inspect when checking overall extract health.
+This repository contains the dbt transformation project. Streamlit applications consume the gold-layer outputs externally and are not stored in this repo.
 
-### `rpt_reconciliation_summary`
-Compares row counts between layers so it’s easy to see whether records were dropped, deduplicated, or filtered out on the way to gold outputs.
+The dbt folder structure maps directly to the warehouse schemas configured in `dbt_project.yml`:
 
-## Tests and documentation
+| dbt folder | Warehouse schema |
+| --- | --- |
+| `staging` | `bronze` |
+| `intermediate` | `silver` |
+| `marts` | `gold` |
 
-The project now includes:
-- source and model descriptions across raw, bronze, silver, and gold layers
-- built-in dbt tests for high-signal columns such as identifiers, status fields, and rule flags
-- singular tests that protect the one-row quality summary and ensure issue counts stay within sensible bounds
+## Schema Naming Behavior
 
-These tests are intentionally practical. For a reconciliation project, the useful checks are the ones that catch broken assumptions in the reporting layer, not just generic null coverage everywhere.
+This project uses a custom `generate_schema_name` macro.
 
-## How to run
+- For `target.name == 'PROD'`, models build directly into the configured schema names from `dbt_project.yml`: `bronze`, `silver`, and `gold`.
+- For all other targets, models build into `<target.schema>_<configured_schema>` to keep development and CI objects isolated.
 
-Install dependencies if packages are added later, then build the project:
+Examples:
+
+- dev/default target with `target.schema = analytics_alice` → `analytics_alice_bronze`
+- prod target with `target.name = 'PROD'` → `bronze`
+
+## Implementation Journey
+
+### 1. Data Extraction
+
+The extraction step was run in Google Colab instead of a local Python environment due to machine restrictions on the development laptop.
+
+That approach worked well for this case study because:
+
+- the dataset only required a one-time extraction
+- Snowflake Trial Edition does not support direct external API integrations for this workflow
+- the generated CSV could be staged and loaded with a simple, repeatable process
+
+### 2. Snowflake Data Ingestion
+
+The extracted CSV was uploaded into a managed Snowflake stage using SnowSQL.
+
+```sql
+PUT file://business_names_extract.csv
+@BUSINESS_NAME_DQ.RAW.BUSINESS_NAME_STAGE
+AUTO_COMPRESS = TRUE;
+```
+
+Rather than loading directly into a physical raw table, the project reads the staged file through the raw view `VW_BUSINESS_NAMES`.
+
+Benefits of that approach:
+
+- preserved source metadata
+- repeatable ingestion
+- complete lineage and auditing
+- stable dbt source definition for downstream models
+
+### 3. dbt Transformations
+
+#### Bronze / `stg_`
+
+- standardises raw fields
+- trims whitespace
+- parses dates
+- preserves lineage metadata
+- adds ingestion timestamps
+
+#### Silver / `int_`
+
+- standardises business names for matching
+- applies business rules
+- deduplicates records
+- generates quality flags
+
+#### Gold / `rpt_`
+
+- `rpt_business_name_search`
+- `rpt_quality_summary`
+- `rpt_reconciliation_summary`
+
+The gold layer exposes business-ready outputs for reporting and downstream consumption, including search eligibility and reconciliation summaries.
+
+## Data Quality Testing
+
+The project combines dbt generic tests with custom SQL tests.
+
+### Generic Tests
+
+- not null
+- unique
+- accepted values
+
+### Custom SQL Tests
+
+- duplicate flag validation
+- registered-with-cancellation-date rule validation
+- search eligibility validation
+- quality summary single-row assertion
+- quality summary count validation
+- reconciliation count ordering validation
+
+## Documentation and Lineage
+
+The project is designed to run through a production dbt job that:
+
+- builds models
+- runs data tests
+- generates dbt documentation artifacts
+- exposes end-to-end lineage across sources, models, and tests
+
+## Streamlit Consumption
+
+External Streamlit applications consume the gold-layer models produced by this project.
+
+Current business-facing use cases include:
+
+- Business Name Search
+- Quality Summary
+- Reconciliation Summary
+
+This keeps dbt responsible for transformation, testing, and trusted data publication, while Streamlit provides the presentation layer externally.
+
+## Running the Project
+
+### Prerequisites
+
+- Snowflake access with permissions to the target database and schemas
+- access to the internal stage `@BUSINESS_NAME_DQ.RAW.BUSINESS_NAME_STAGE`
+- access to the raw source view `VW_BUSINESS_NAMES` in Snowflake
+- a dbt target configured for your environment
+
+### Upload CSV
+
+```sql
+PUT file://<local_csv_path>
+@BUSINESS_NAME_DQ.RAW.BUSINESS_NAME_STAGE;
+```
+
+### Execute dbt
 
 ```bash
 dbt build
 ```
 
-To validate just the reporting layer and its dependencies:
-
-```bash
-dbt build --select +rpt_quality_summary+
-dbt build --select +rpt_reconciliation_summary+
-```
-
-To generate docs:
+### Generate Documentation
 
 ```bash
 dbt docs generate
 ```
 
-## Recommended next improvements
+## Assumptions
 
-A few additions would make this repo stronger:
-- add source freshness config once the expected landing cadence is known
-- add custom generic tests for ABN format if you want stricter validation than length
-- add exposures or semantic-layer objects if these gold outputs feed dashboards or apps
-- add owners and tags in YAML so responsibility for DQ checks is explicit
+- one-time extraction is sufficient for this case study
+- Snowflake Trial Edition limitations prevent direct API ingestion in this workflow
+- future files will continue to be uploaded into the managed Snowflake stage
+- business name matching uses deterministic standardisation rather than fuzzy matching
+
+## Future Enhancements
+
+- incremental dbt models
+- automated API ingestion
+- source freshness monitoring
+- ABN checksum validation
+- fuzzy business name matching
+- automated data quality alerting
+- CI/CD with GitHub Actions
+- dbt exposures and semantic layer extensions
+
+## AI Usage
+
+AI-assisted development tools were used to support solution design, SQL refinement, dbt model organisation, documentation, testing ideas, and implementation guidance.
+
+All generated content was reviewed, modified, tested, and validated before implementation.
+
+The final solution reflects the implemented project structure and behavior in this repository.
