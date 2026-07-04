@@ -4,14 +4,32 @@ sources:
   - name: raw
     database: BUSINESS_NAME_DQ
     schema: RAW
-    description: Raw layer views created from Snowflake staged CSV files.
+    description: Raw layer views created from Snowflake staged CSV files for business name quality validation and reconciliation workflows.
     tables:
       - name: VW_BUSINESS_NAMES
-        description: Raw business names data queried from Snowflake managed stage.
+        description: Raw business name records ingested from Snowflake-managed stage files before dbt standardisation and quality checks.
         columns:
           - name: BN_NAME
-            description: Business name from the source register.
+            description: Business name as supplied by the source register.
+            data_tests:
+              - not_null
           - name: BN_STATUS
-            description: Registration status of the business name.
+            description: Registration status of the business name in the source extract.
+            data_tests:
+              - not_null
           - name: BN_ABN
-            description: Australian Business Number.
+            description: Australian Business Number associated with the business name when provided.
+          - name: REGISTER_NAME
+            description: Name of the upstream register that supplied the record.
+          - name: _ID
+            description: Source-system record identifier from the staged file.
+            data_tests:
+              - not_null
+          - name: SOURCE_FILE_NAME
+            description: Name of the staged file that produced the raw record.
+          - name: SOURCE_ROW_NUMBER
+            description: Row number within the staged file for traceability back to the raw extract.
+          - name: FILE_LAST_MODIFIED
+            description: Last modified timestamp of the staged input file.
+          - name: EXTRACT_LOADED_AT
+            description: Timestamp captured in the raw extract indicating when the source data was loaded.
