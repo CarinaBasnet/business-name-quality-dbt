@@ -1,0 +1,52 @@
+version: 2
+
+models:
+  - name: int_business_names_cleaned
+    description: Silver reconciliation model that standardises business names, flags common data quality issues, and ranks potential duplicates by ABN and standardised name. One row per staged business name record.
+    columns:
+      - name: bn_name_standardised
+        description: Upper-cased and punctuation-stripped business name used for reconciliation and duplicate detection.
+      - name: flag_invalid_abn
+        description: Indicator showing whether the supplied ABN is missing or not 11 characters long.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: flag_missing_business_name
+        description: Indicator showing whether the raw business name is null or blank after trimming.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: flag_invalid_status
+        description: Indicator showing whether the status falls outside the expected REGISTERED and DEREGISTERED values.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: flag_registered_with_cancel_date
+        description: Indicator showing a reconciliation exception where a registered business name also has a cancellation date.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: duplicate_rank
+        description: Rank of the record within each ABN and standardised business name grouping ordered by most recent file metadata.
+        data_tests:
+          - not_null
+      - name: flag_duplicate
+        description: Indicator showing whether the record is a lower-ranked duplicate within its ABN and standardised business name grouping.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false

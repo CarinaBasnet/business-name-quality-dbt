@@ -1,0 +1,74 @@
+version: 2
+
+models:
+  - name: rpt_business_name_search
+    description: Gold reporting model that exposes business names and registration attributes for downstream search use cases, with an eligibility flag driven by quality and reconciliation rules.
+    columns:
+      - name: bn_abn
+        description: Australian Business Number associated with the business name.
+      - name: bn_name
+        description: Business name as presented to downstream consumers.
+      - name: bn_name_standardised
+        description: Standardised version of the business name used for matching and reconciliation.
+      - name: bn_status
+        description: Business name registration status.
+      - name: bn_state_num
+        description: Source-provided state registration number.
+      - name: bn_state_of_reg
+        description: State or territory of registration.
+      - name: bn_reg_dt
+        description: Registration date for the business name.
+      - name: bn_cancel_dt
+        description: Cancellation date for the business name when present.
+      - name: is_search_eligible
+        description: Indicator showing whether the record is safe to expose in search based on key data quality and registration checks.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+
+  - name: rpt_quality_summary
+    description: Gold one-row summary of key data quality issue counts detected in the cleaned business name dataset.
+    columns:
+      - name: total_rows
+        description: Total number of rows evaluated in the cleaned silver model.
+        data_tests:
+          - not_null
+      - name: invalid_abn_count
+        description: Number of rows flagged with an invalid or missing-length ABN.
+        data_tests:
+          - not_null
+      - name: missing_business_name_count
+        description: Number of rows flagged with a null or blank business name.
+        data_tests:
+          - not_null
+      - name: invalid_status_count
+        description: Number of rows flagged with an unexpected status value.
+        data_tests:
+          - not_null
+      - name: registered_with_cancel_date_count
+        description: Number of registered records that also have a cancellation date.
+        data_tests:
+          - not_null
+      - name: duplicate_count
+        description: Number of rows flagged as duplicates after ABN and standardised-name ranking.
+        data_tests:
+          - not_null
+
+  - name: rpt_reconciliation_summary
+    description: Gold reconciliation report that compares row counts across the raw, bronze, silver, and search-eligible gold layers to make pipeline attrition visible.
+    columns:
+      - name: layer
+        description: Name of the pipeline layer or filtered reporting slice being counted.
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values: ['raw', 'bronze', 'silver', 'gold_search_eligible']
+      - name: row_count
+        description: Number of rows present in the corresponding layer or filtered slice.
+        data_tests:
+          - not_null

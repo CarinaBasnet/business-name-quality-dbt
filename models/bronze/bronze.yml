@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: stg_business_names
+    description: Standardised bronze staging model for raw business name records. This model trims text fields, normalises casing, parses source dates, and preserves file-level lineage columns used downstream for reconciliation and duplicate handling.
+    columns:
+      - name: source_file_name
+        description: Name of the source file that produced the staged record.
+      - name: source_row_number
+        description: Original row number from the source file.
+        data_tests:
+          - not_null
+      - name: file_content_key
+        description: File content key captured from the staged ingestion process.
+      - name: file_last_modified
+        description: Last modified timestamp of the staged source file.
+      - name: scan_timestamp
+        description: Timestamp when Snowflake scanned the staged file.
+      - name: _id
+        description: Source-system identifier carried through from the raw extract.
+        data_tests:
+          - not_null
+          - unique
+      - name: register_name
+        description: Name of the upstream business register.
+      - name: bn_name
+        description: Trimmed business name from the raw source.
+      - name: bn_status
+        description: Upper-cased business name registration status.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['REGISTERED', 'DEREGISTERED']
+              config:
+                severity: warn
+      - name: bn_reg_dt
+        description: Parsed business name registration date.
+      - name: bn_cancel_dt
+        description: Parsed business name cancellation date.
+      - name: bn_state_num
+        description: State registration number supplied by the source.
+      - name: bn_state_of_reg
+        description: Upper-cased state or territory of registration.
+      - name: bn_abn
+        description: Trimmed Australian Business Number from the source.
+      - name: extract_loaded_at
+        description: Parsed extract load timestamp from the raw file.
+      - name: source_resource_id
+        description: Source resource identifier from the ingestion process.
+      - name: dbt_loaded_at
+        description: Timestamp when the row was materialized by dbt.
+        data_tests:
+          - not_null
