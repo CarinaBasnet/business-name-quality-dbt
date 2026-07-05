@@ -138,6 +138,64 @@ That approach worked well for this case study because:
 - Snowflake Trial Edition does not support direct external API integrations for this workflow
 - the generated CSV could be staged and loaded with a simple, repeatable process
 
+#### Python Data Extraction Script
+
+```python
+import requests
+import pandas as pd
+from datetime import datetime
+from pathlib import Path
+
+RESOURCE_ID = "55ad4b1c-5eeb-44ea-8b29-d410da431be3"
+API_URL = "https://data.gov.au/data/api/3/action/datastore_search"
+
+OUTPUT_FOLDER = Path("data")
+OUTPUT_FOLDER.mkdir(exist_ok=True)
+
+LIMIT = 50000
+offset = 0
+all_records = []
+
+print("Starting extract...")
+
+while True:
+    params = {
+        "resource_id": RESOURCE_ID,
+        "limit": LIMIT,
+        "offset": offset
+    }
+
+    response = requests.get(API_URL, params=params, timeout=60)
+    response.raise_for_status()
+
+    result = response.json()["result"]
+    records = result["records"]
+
+    if not records:
+        break
+
+    all_records.extend(records)
+
+    print(f"Extracted {len(all_records)} records so far...")
+
+    offset += LIMIT
+
+df = pd.DataFrame(all_records)
+
+# Add ingestion metadata
+df["extract_loaded_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+df["source_resource_id"] = RESOURCE_ID
+
+file_name = f"business_names_extract_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+file_path = OUTPUT_FOLDER / file_name
+
+df.to_csv(file_path, index=False, encoding="utf-8")
+
+print("Extract complete.")
+print(f"Rows extracted: {len(df)}")
+print(f"File saved to: {file_path}")
+```
+
 ### 2. Snowflake Data Ingestion
 
 The extracted CSV was uploaded into a managed Snowflake stage using SnowSQL.
